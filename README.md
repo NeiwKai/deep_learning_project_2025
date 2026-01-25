@@ -19,7 +19,7 @@ x = base_model(x, training=True)
 x = keras.layers.GlobalAveragePooling2D()(x)
 outputs = keras.layers.Dense(num_classes, activation="softmax")(x)
 ```
-<br/> <br/> <br/>
+
 ### TODO
 -   [ ] Develop a base test script
 -   [ ] Train the model with acceptable result
