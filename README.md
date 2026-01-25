@@ -24,3 +24,4 @@ outputs = keras.layers.Dense(num_classes, activation="softmax")(x)
 -   [ ] Develop a base test script
 -   [ ] Train the model with acceptable result
 -   [ ] Create a report
+-   [ ] Write a docker image
