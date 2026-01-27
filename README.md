@@ -1,7 +1,7 @@
 ## Format
 -   Python Version: `3.11.9`
--   filename: "<model>_cloud.ipynb"
--   `model_path`: "best_<model>.keras"
+-   filename: "`model`_cloud.ipynb"
+-   `model_path`: "best_`model`.keras"
 
 ### Change the model here
 ```python
