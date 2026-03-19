@@ -3,7 +3,7 @@ import torch.nn as nn
 from torchvision.models import mobilenet_v2, MobileNet_V2_Weights
 
 class MobileNetMultiHead(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes=10):
         super().__init__()
         weights = MobileNet_V2_Weights.DEFAULT
         model = mobilenet_v2(weights=weights)
@@ -13,7 +13,7 @@ class MobileNetMultiHead(nn.Module):
         self.features = model.features
 
         # global average pooling
-        self.pool = nn.AdaptiveAvgPool2d((3, 3))
+        self.pool = nn.AdaptiveAvgPool2d((1, 1))
 
         in_features = model.classifier[1].in_features
         
@@ -27,7 +27,7 @@ class MobileNetMultiHead(nn.Module):
 
         # equivalent to preprocess_input must be done in transforms
 
-        x = self.backbone(x)
+        x = self.features(x)
 
         x = self.pool(x)
         x = torch.flatten(x, 1)
@@ -44,9 +44,9 @@ class MobileNetMultiHead(nn.Module):
 
 from torchvision.models import resnet18, ResNet18_Weights
 
-class MultiTaskModel(nn.Module):
-    def __init__(self, num_classes=3):
-        super(MultiTaskModel, self).__init__()
+class ResNet18MultiHead(nn.Module):
+    def __init__(self, num_classes=10):
+        super(ResNet18MultiHead, self).__init__()
         
         # Load ResNet backbone
         weights = ResNet18_Weights.DEFAULT
@@ -69,4 +69,30 @@ class MultiTaskModel(nn.Module):
         class_out = self.classifier(out) 
         bbox_out = self.regressor(out) 
 
+        return class_out, bbox_out
+
+from torchvision.models import resnet50, ResNet50_Weights
+
+class ResNet50MultiHead(nn.Module):
+    def __init__(self, num_classes=10):
+        super(ResNet50MultiHead, self).__init__()
+
+        # Load ResNet50 backbone
+        weights = ResNet50_Weights.DEFAULT
+        resnet = resnet50(weights=weights)
+        self.backbone = nn.Sequential(*list(resnet.children())[:-1])
+
+        n_features = resnet.fc.in_features
+
+        self.classifier = nn.Linear(n_features, num_classes)
+
+        self.regressor = nn.Linear(n_features, 4)
+
+    def forward(self, x):
+        out = self.backbone(x)
+        out = torch.flatten(out, 1)
+
+        class_out = self.classifier(out)
+        bbox_out = self.regressor(out)
+        
         return class_out, bbox_out
