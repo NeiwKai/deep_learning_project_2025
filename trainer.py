@@ -16,7 +16,7 @@ from torcheval.metrics.functional import (
 import torch.nn.functional as F
 
 from dataset import ObjectDataset
-from model import MultiTaskModel
+from model import MobileNetMultiHead, ResNet18MultiHead, ResNet50MultiHead
 from dl_utils import train_one_epoch, test
 
 CLASS_NAMES = [
@@ -85,7 +85,7 @@ else:
 print("Using device:", device)
 
 # Model Initialize
-model_base = MultiTaskModel(num_classes=num_classes)
+model_base = MobileNetMultiHead(num_classes=num_classes)
 model = model_base
 model = model.to(device)
 
