@@ -16,7 +16,7 @@ from torcheval.metrics.functional import (
 import torch.nn.functional as F
 
 from dataset import ObjectDataset
-from model import MobileNetMultiHead, ResNet18MultiHead, ResNet50MultiHead
+from model import MobileNetMultiHead, ResNet18MultiHead, ResNet50MultiHead, UNetMultiHead
 from dl_utils import train_one_epoch, test
 
 CLASS_NAMES = [
@@ -85,13 +85,13 @@ else:
 print("Using device:", device)
 
 # Model Initialize
-model_base = MobileNetMultiHead(num_classes=num_classes)
+model_base = UNetMultiHead(num_classes=num_classes)
 model = model_base
 model = model.to(device)
 
 
 learning_rate = 1e-5
-batch_size = 4   
+batch_size = 1   
 epochs = 10           
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 writer = SummaryWriter(f'./runs/trainer_{model._get_name()}_{datetime.now().strftime("%Y%m%d-%H%M%S")}')

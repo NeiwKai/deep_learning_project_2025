@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torchvision.models import mobilenet_v2, MobileNet_V2_Weights
 
 class MobileNetMultiHead(nn.Module):
@@ -95,4 +96,93 @@ class ResNet50MultiHead(nn.Module):
         class_out = self.classifier(out)
         bbox_out = self.regressor(out)
         
+        return class_out, bbox_out
+
+# -- UNet --
+
+class DoubleConv(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+# Down block
+class Down(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super().__init__()
+        self.conv = DoubleConv(in_ch, out_ch)
+        self.pool = nn.MaxPool2d(2)
+
+    def forward(self, x):
+        x_conv = self.conv(x)
+        x_pool = self.pool(x_conv)
+        return x_conv, x_pool
+
+
+# Up block 
+class Up(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super().__init__()
+        self.conv = DoubleConv(in_ch, out_ch)
+
+    def forward(self, x, skip):
+        # Upsample
+        x = F.interpolate(x, size=skip.shape[2:], mode='bilinear', align_corners=False)
+        
+        # Concatenate
+        x = torch.cat([x, skip], dim=1)
+        
+        return self.conv(x)
+
+
+# Full UNet
+class UNetMultiHead(nn.Module):
+    def __init__(self, num_classes=10):
+        super().__init__()
+
+        self.down1 = Down(3, 8)
+        self.down2 = Down(8, 16)
+        self.down3 = Down(16, 32)
+        self.down4 = Down(32, 64)
+
+        self.bottleneck = DoubleConv(64, 128)
+
+        self.up1 = Up(128 + 64, 64)
+        self.up2 = Up(64 + 32, 32)
+        self.up3 = Up(32 + 16, 16)
+        self.up4 = Up(16 + 8, 8)
+
+        self.classifier = nn.Linear(3276800, num_classes)
+        self.regressor = nn.Linear(3276800, 4)
+
+    def forward(self, x):
+        # Encoder
+        s1, x = self.down1(x)
+        s2, x = self.down2(x)
+        s3, x = self.down3(x)
+        s4, x = self.down4(x)
+
+        # Bottleneck
+        x = self.bottleneck(x)
+
+        # Decoder
+        x = self.up1(x, s4)
+        x = self.up2(x, s3)
+        x = self.up3(x, s2)
+        x = self.up4(x, s1)
+
+        x = torch.flatten(x, 1)
+        class_out = self.classifier(x)
+        bbox_out = self.regressor(x)
+
         return class_out, bbox_out
