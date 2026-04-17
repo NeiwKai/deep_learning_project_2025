@@ -17,7 +17,7 @@ import torch.nn.functional as F
 
 from dataset import ObjectDataset
 from model import MobileNetMultiHead, ResNet18MultiHead, ResNet50MultiHead, UNetMultiHead
-from dl_utils import train_one_epoch, test
+from dl_utils import giou_loss, train_one_epoch, test
 
 CLASS_NAMES = [
     "altocumulus",
@@ -32,7 +32,26 @@ CLASS_NAMES = [
     "stratus",
 ]
 num_classes = len(CLASS_NAMES)
-IMG_SIZE = (224, 224)
+
+# Define Augmentations for Training
+train_transforms = transforms_v2.Compose([
+    transforms_v2.Resize((224, 224)),
+    transforms_v2.RandomHorizontalFlip(p=0.5),
+    transforms_v2.RandomRotation(degrees=15),
+    transforms_v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+    transforms_v2.RandomResizedCrop(size=(224, 224), scale=(0.8, 1.0)),
+    transforms_v2.ToImage(),
+    transforms_v2.ToDtype(torch.float32, scale=True),
+    transforms_v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+
+# Define Transformations for Validation & Test (No Augmentation, but with Bounding Box Support)
+test_transforms = transforms_v2.Compose([
+    transforms_v2.Resize((224, 224)),
+    transforms_v2.ToImage(),
+    transforms_v2.ToDtype(torch.float32, scale=True),
+    transforms_v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
 
 # Train set
 TRAINING_CSV_FILE = 'Cloud-Classification-7/train/_annotations.csv'
@@ -42,7 +61,7 @@ training_image_records = pd.read_csv(TRAINING_CSV_FILE)
 
 train_image_path = os.path.join(os.getcwd(), TRAINING_IMAGE_DIR)
 
-train_ds = ObjectDataset(training_image_records, train_image_path)
+train_ds = ObjectDataset(training_image_records, train_image_path, transform=train_transforms)
 
 # Validate set
 VALIDATING_CSV_FILE = 'Cloud-Classification-7/valid/_annotations.csv'
@@ -52,7 +71,7 @@ validating_image_records = pd.read_csv(VALIDATING_CSV_FILE)
 
 valid_image_path = os.path.join(os.getcwd(), VALIDATING_IMAGE_DIR)
 
-valid_ds = ObjectDataset(validating_image_records, valid_image_path)
+valid_ds = ObjectDataset(validating_image_records, valid_image_path, transform=test_transforms)
 
 # Testing set
 TESTING_CSV_FILE = 'Cloud-Classification-7/test/_annotations.csv'
@@ -62,9 +81,11 @@ testing_image_records = pd.read_csv(TESTING_CSV_FILE)
 
 test_image_path = os.path.join(os.getcwd(), TESTING_IMAGE_DIR)
 
-test_ds = ObjectDataset(testing_image_records, test_image_path)
+test_ds = ObjectDataset(testing_image_records, test_image_path, transform=test_transforms)
 
-
+print(f"Train set: {len(train_ds)} samples")
+print(f"Valid set: {len(valid_ds)} samples")
+print(f"Test set: {len(test_ds)} samples\n")
 
 train_dl = DataLoader(train_ds, batch_size=32, shuffle=True)
 valid_dl = DataLoader(valid_ds, batch_size=32, shuffle=False)
@@ -72,7 +93,7 @@ test_dl = DataLoader(test_ds, batch_size=32, shuffle=False)
 
 losses = {
     "cl_head": nn.CrossEntropyLoss(),  # Loss for class prediction
-    "bb_head": nn.MSELoss() # Loss for bounding box prediction
+    "bb_head": giou_loss # Loss for bounding box prediction
 }
 
 if torch.cuda.is_available():
@@ -85,13 +106,12 @@ else:
 print("Using device:", device)
 
 # Model Initialize
-model_base = UNetMultiHead(num_classes=num_classes)
+model_base = MobileNetMultiHead(num_classes=num_classes)
 model = model_base
 model = model.to(device)
 
 
-learning_rate = 1e-5
-batch_size = 1   
+learning_rate = 1e-3
 epochs = 10           
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 writer = SummaryWriter(f'./runs/trainer_{model._get_name()}_{datetime.now().strftime("%Y%m%d-%H%M%S")}')
@@ -147,6 +167,24 @@ print("Training Complete!")
 model_best = model_base
 model_best = model_best.to(device)
 model_best.load_state_dict(torch.load(f"{model._get_name()}_best_vloss.pth"))
+
+# Evaluate on the train set
+train_loss, train_bbox_loss, train_y_preds, train_y_trues, train_bbox_preds, train_bbox_trues = test(
+    train_dl, model, losses, device
+)
+
+# Compute test classification metrics
+train_accuracy = multiclass_accuracy(train_y_preds, train_y_trues).item()
+train_f1 = multiclass_f1_score(train_y_preds, train_y_trues).item()
+
+# Compute bounding box MSE
+train_bbox_mse = F.mse_loss(train_bbox_preds, train_bbox_trues).item()
+print(f"\nTrain Results:")
+print(f"Classification Loss: {train_loss:.4f}")
+print(f"Bounding Box MSE: {train_bbox_mse:.4f}")
+print(f"Accuracy: {train_accuracy:.2f}%")
+print(f"F1 Score: {train_f1:.2f}")
+
 
 # Evaluate on the test set
 test_loss, test_bbox_loss, test_y_preds, test_y_trues, test_bbox_preds, test_bbox_trues = test(
