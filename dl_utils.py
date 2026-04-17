@@ -146,7 +146,7 @@ def plot_predictions(
     plt.close('all')
 
 def _draw_bbox(ax, bbox, img_h, img_w, color, label="", mode="gt"):
-    x1, y1, x2, y2 = bbox  # correct format
+    x1, y1, x2, y2 = bbox
 
     x = x1 * img_w
     y = y1 * img_h
@@ -164,14 +164,9 @@ def _draw_bbox(ax, bbox, img_h, img_w, color, label="", mode="gt"):
         tx, ty = x, y + h
 
     ax.text(
-        tx,
-        ty,
-        label,
-        color=color,
-        fontsize=10,
+        tx, ty, label, color=color, fontsize=10,
         bbox=dict(facecolor="white", alpha=0.7),
-        ha="left",
-        va="top"
+        ha="left", va="top"
     )
     
 
