@@ -3,6 +3,39 @@ import matplotlib.pyplot as plt
 import numpy as np
 from torch.amp import autocast, GradScaler # Automatically run operations in lower precision (FP16) 
 
+def giou_loss(preds, targets):
+    # preds, targets: [B, 4] in xyxy format
+
+    x1_p, y1_p, x2_p, y2_p = preds.T
+    x1_t, y1_t, x2_t, y2_t = targets.T
+
+    # intersection
+    x1 = torch.max(x1_p, x1_t)
+    y1 = torch.max(y1_p, y1_t)
+    x2 = torch.min(x2_p, x2_t)
+    y2 = torch.min(y2_p, y2_t)
+
+    inter = (x2 - x1).clamp(min=0) * (y2 - y1).clamp(min=0)
+
+    # areas
+    area_p = (x2_p - x1_p) * (y2_p - y1_p)
+    area_t = (x2_t - x1_t) * (y2_t - y1_t)
+
+    union = area_p + area_t - inter
+    iou = inter / (union + 1e-7)
+
+    # enclosing box
+    x1_c = torch.min(x1_p, x1_t)
+    y1_c = torch.min(y1_p, y1_t)
+    x2_c = torch.max(x2_p, x2_t)
+    y2_c = torch.max(y2_p, y2_t)
+
+    area_c = (x2_c - x1_c) * (y2_c - y1_c)
+
+    giou = iou - (area_c - union) / (area_c + 1e-7)
+
+    return 1 - giou.mean()
+
 def train_one_epoch(
         dataloader, model, losses, optimizer, 
         epoch, device, writer, log_step_interval=50
@@ -12,7 +45,7 @@ def train_one_epoch(
     running_loss = 0
     scaler = GradScaler()
 
-    for i, (X, y, bboxes) in enumerate(dataloader):
+    for i, (X, y, bboxes, _) in enumerate(dataloader):
 
         X = X.to(device)
         y = y.to(device)
@@ -24,6 +57,7 @@ def train_one_epoch(
             cl_pred, bb_pred = model(X)
             cl_loss = losses["cl_head"](cl_pred, y)
             bb_loss = losses["bb_head"](bb_pred, bboxes)
+
             total_loss = cl_loss + bb_loss
 
         scaler.scale(total_loss).backward()
@@ -44,7 +78,7 @@ def test(dataloader, model, losses, device):
     bbox_preds, bbox_trues = [], []
 
     with torch.no_grad():
-        for i, (X, y, bboxes) in enumerate(dataloader):
+        for i, (X, y, bboxes, _) in enumerate(dataloader):
 
             X = X.to(device)
             y = y.to(device)
@@ -72,8 +106,8 @@ def test(dataloader, model, losses, device):
 
 def plot_predictions(
         images, labels, bboxes_true, class_names, 
-        preds=None, bboxes_pred=None, num_samples=6, 
-        save_path="predictions.jpg"
+        preds=None, bboxes_pred=None, og_size=None,
+        num_samples=6, save_path="predictions.jpg"
     ):
     num_samples = min(num_samples, images.shape[0])  # Ensure we don't exceed batch size
 
@@ -86,7 +120,7 @@ def plot_predictions(
     for i in range(num_samples):
         img = images[i].detach()
         label = labels[i].item()
-        bbox_t = bboxes_true[i].detach().numpy()  # Ground truth bbox
+        bbox_t = bboxes_true[i].detach().cpu().numpy()  # Ground truth bbox
 
         # Unnormalize image
         img = img * std + mean
@@ -96,15 +130,14 @@ def plot_predictions(
         ax.imshow(img)
         
         # Draw ground truth bbox
-        img_h, img_w, _ = img.shape
-        # print(img.shape, img_w, img_h)
+        img_w, img_h = og_size[i]
         _draw_bbox(ax, bbox_t, img_h, img_w, "green", label=f"GT: {class_names[label]}")
         
         # Draw predicted bbox
         if preds is not None:
             pred = preds[i].argmax().item() # Add argmax() to get exactly 1 label outcome
-            bbox_p = bboxes_pred[i].detach().numpy()  # Predicted bbox
-            _draw_bbox(ax, bbox_p, img_h, img_w, "red", label=f"Pred: {class_names[pred]}")
+            bbox_p = bboxes_pred[i].detach().cpu().numpy()  # Predicted bbox
+            _draw_bbox(ax, bbox_p, img_h, img_w, "red", label=f"Pred: {class_names[pred]}", mode="pred")
 
         ax.axis("off")
 
@@ -112,8 +145,38 @@ def plot_predictions(
     plt.savefig(save_path)
     plt.close('all')
 
+def _draw_bbox(ax, bbox, img_h, img_w, color, label="", mode="gt"):
+    x1, y1, x2, y2 = bbox  # correct format
 
-def _draw_bbox(ax, bbox, img_h, img_w, color, label=""):
+    x = x1 * img_w
+    y = y1 * img_h
+    w = (x2 - x1) * img_w
+    h = (y2 - y1) * img_h
+
+    rect = plt.Rectangle((x, y), w, h, linewidth=2, edgecolor=color, facecolor="none")
+    ax.add_patch(rect)
+    # GT: top-left
+    if mode == "gt":
+        tx, ty = x, max(0, y - 5)
+
+    # Pred: bottom-left
+    else:
+        tx, ty = x, y + h
+
+    ax.text(
+        tx,
+        ty,
+        label,
+        color=color,
+        fontsize=10,
+        bbox=dict(facecolor="white", alpha=0.7),
+        ha="left",
+        va="top"
+    )
+    
+
+
+def OO_draw_bbox(ax, bbox, img_h, img_w, color, label=""):
     x, y, w, h = bbox
     x *= img_w
     y *= img_h
