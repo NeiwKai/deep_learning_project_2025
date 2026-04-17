@@ -23,15 +23,14 @@ class MobileNetMultiHead(nn.Module):
         self.bb_head = nn.Linear(in_features, 4)
 
     def forward(self, x):
-        x = self.features(x)
-        x = self.pool(x)
-        x = torch.flatten(x, 1)
-
+        out = self.features(x)
+        out = self.pool(out)
+        out = torch.flatten(out, 1)
         
-        class_output = self.cl_head(x)
+        class_output = self.cl_head(out)
 
         # Convert to cxcywh
-        bbox_raw = self.bb_head(x)
+        bbox_raw = self.bb_head(out)
         bbox_raw = torch.sigmoid(bbox_raw)
 
         cx, cy, w, h = bbox_raw.unbind(-1)
@@ -60,20 +59,31 @@ class ResNet18MultiHead(nn.Module):
         # The output size of from self.backbone
         n_features = resnet.fc.in_features
 
-        # Classification head
-        self.classifier = nn.Linear(n_features, num_classes) 
+        self.cl_head = nn.Linear(n_features, num_classes) 
 
-        # Localization head (bounding box regression)
-        self.regressor = nn.Linear(n_features, 4) 
+        self.bb_head = nn.Linear(n_features, 4) 
 
     def forward(self, x):
         out = self.backbone(x)
         out = torch.flatten(out, 1)  # Flatten the output
 
-        class_out = self.classifier(out) 
-        bbox_out = self.regressor(out) 
+        class_output = self.cl_head(out) 
 
-        return class_out, bbox_out
+        # Convert to cxcywh
+        bbox_raw = self.bb_head(out)
+        bbox_raw = torch.sigmoid(bbox_raw)
+
+        cx, cy, w, h = bbox_raw.unbind(-1)
+
+        x1 = cx - w / 2
+        y1 = cy - h / 2
+        x2 = cx + w / 2
+        y2 = cy + h / 2
+
+        bbox_output = torch.stack([x1, y1, x2, y2], dim=-1)
+        bbox_output = bbox_output.clamp(0, 1)
+
+        return class_output, bbox_output
 
 from torchvision.models import resnet50, ResNet50_Weights
 
@@ -88,18 +98,31 @@ class ResNet50MultiHead(nn.Module):
 
         n_features = resnet.fc.in_features
 
-        self.classifier = nn.Linear(n_features, num_classes)
+        self.cl_head = nn.Linear(n_features, num_classes)
 
-        self.regressor = nn.Linear(n_features, 4)
+        self.bb_head = nn.Linear(n_features, 4)
 
     def forward(self, x):
         out = self.backbone(x)
         out = torch.flatten(out, 1)
 
-        class_out = self.classifier(out)
-        bbox_out = self.regressor(out)
+        class_output = self.cl_head(out)
+
+        # Convert to cxcywh
+        bbox_raw = self.bb_head(out)
+        bbox_raw = torch.sigmoid(bbox_raw)
+
+        cx, cy, w, h = bbox_raw.unbind(-1)
+
+        x1 = cx - w / 2
+        y1 = cy - h / 2
+        x2 = cx + w / 2
+        y2 = cy + h / 2
+
+        bbox_output = torch.stack([x1, y1, x2, y2], dim=-1)
+        bbox_output = bbox_output.clamp(0, 1)
         
-        return class_out, bbox_out
+        return class_output, bbox_output
 
 # -- UNet --
 
@@ -165,8 +188,8 @@ class UNetMultiHead(nn.Module):
         self.up3 = Up(32 + 16, 16)
         self.up4 = Up(16 + 8, 8)
 
-        self.classifier = nn.Linear(3276800, num_classes)
-        self.regressor = nn.Linear(3276800, 4)
+        self.cl_head = nn.Linear(8, num_classes)
+        self.bb_head = nn.Linear(8, 4)
 
     def forward(self, x):
         # Encoder
@@ -184,8 +207,22 @@ class UNetMultiHead(nn.Module):
         x = self.up3(x, s2)
         x = self.up4(x, s1)
 
+        x = F.adaptive_avg_pool2d(x, (1, 1))
         x = torch.flatten(x, 1)
-        class_out = self.classifier(x)
-        bbox_out = self.regressor(x)
+        class_output = self.cl_head(x)
+        
+        # Convert to cxcywh
+        bbox_raw = self.bb_head(x)
+        bbox_raw = torch.sigmoid(bbox_raw)
 
-        return class_out, bbox_out
+        cx, cy, w, h = bbox_raw.unbind(-1)
+
+        x1 = cx - w / 2
+        y1 = cy - h / 2
+        x2 = cx + w / 2
+        y2 = cy + h / 2
+
+        bbox_output = torch.stack([x1, y1, x2, y2], dim=-1)
+        bbox_output = bbox_output.clamp(0, 1)
+
+        return class_output, bbox_output
