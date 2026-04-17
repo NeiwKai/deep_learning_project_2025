@@ -2,7 +2,8 @@ import os
 import torch
 import pandas as pd
 from torch.utils.data import DataLoader
-from model import MobileNetMultiHead, ResNet18MultiHead, ResNet50MultiHead
+import torchvision.transforms.v2 as transforms_v2
+from model import MobileNetMultiHead, ResNet18MultiHead, ResNet50MultiHead, UNetMultiHead
 from dataset import ObjectDataset
 from dl_utils import plot_predictions
 
@@ -19,6 +20,24 @@ CLASS_NAMES = [
     "stratus",
 ]
 
+# Define Transformations for Validation & Test (No Augmentation, but with Bounding Box Support)
+test_transforms = transforms_v2.Compose([
+    transforms_v2.Resize((224, 224)),
+    transforms_v2.ToImage(),
+    transforms_v2.ToDtype(torch.float32, scale=True),
+    transforms_v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+
+def collate_fn(batch):
+    imgs, labels, bboxes, sizes = zip(*batch)
+
+    return (
+        torch.stack(imgs),
+        torch.stack(labels),
+        torch.stack(bboxes),
+        list(sizes)   # force to tuple of int
+    )
+
 if __name__ == '__main__':
     TESTING_CSV_FILE = 'Cloud-Classification-7/test/_annotations.csv'
     TESTING_IMAGE_DIR = 'Cloud-Classification-7/test'
@@ -27,8 +46,8 @@ if __name__ == '__main__':
 
     test_image_path = os.path.join(os.getcwd(), TESTING_IMAGE_DIR)
 
-    test_ds = ObjectDataset(testing_image_records, test_image_path)
-    test_dl = DataLoader(test_ds, batch_size=32, shuffle=False)
+    test_ds = ObjectDataset(testing_image_records, test_image_path, transform=test_transforms)
+    test_dl = DataLoader(test_ds, batch_size=32, shuffle=True, collate_fn=collate_fn) # Just want to see different result
 
     num_classes = len(CLASS_NAMES)
 
@@ -41,12 +60,12 @@ if __name__ == '__main__':
 
     print("Using device:", device)
 
-    model_base = ResNet18MultiHead(num_classes=num_classes)
+    model_base = MobileNetMultiHead(num_classes=num_classes)
     model = model_base
     model = model.to(device)
     model.load_state_dict(torch.load(f"{model._get_name()}_best_vloss.pth"))
 
-    test_images, test_labels, test_bboxes = next(iter(test_dl))
+    test_images, test_labels, test_bboxes, test_og_size = next(iter(test_dl))
     test_images = test_images.to(device)
 
     with torch.no_grad():
@@ -56,7 +75,8 @@ if __name__ == '__main__':
     # Plot predictions
     plot_predictions(
         test_images, test_labels, test_bboxes, CLASS_NAMES,
-        test_preds.cpu(), test_bboxes_pred.cpu(), 
+        test_preds.cpu(), test_bboxes_pred.cpu(), test_og_size, 
         num_samples=16, save_path="predictions.jpg",
     )
+    print("Save prediction as 'predictions.jpg'!")
 
