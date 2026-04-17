@@ -8,8 +8,6 @@ class MobileNetMultiHead(nn.Module):
         super().__init__()
         weights = MobileNet_V2_Weights.DEFAULT
         model = mobilenet_v2(weights=weights)
-        self.backbone = nn.Sequential(*list(model.children())[:-1])
-
         # backbone (remove classifier)
         self.features = model.features
 
@@ -25,21 +23,26 @@ class MobileNetMultiHead(nn.Module):
         self.bb_head = nn.Linear(in_features, 4)
 
     def forward(self, x):
-
-        # equivalent to preprocess_input must be done in transforms
-
         x = self.features(x)
-
         x = self.pool(x)
         x = torch.flatten(x, 1)
 
         
-        class_output = torch.softmax(self.cl_head(x), dim=1)
-        bbox_output = torch.sigmoid(self.bb_head(x))
-        '''
         class_output = self.cl_head(x)
-        bbox_output = self.bb_head(x)
-        '''
+
+        # Convert to cxcywh
+        bbox_raw = self.bb_head(x)
+        bbox_raw = torch.sigmoid(bbox_raw)
+
+        cx, cy, w, h = bbox_raw.unbind(-1)
+
+        x1 = cx - w / 2
+        y1 = cy - h / 2
+        x2 = cx + w / 2
+        y2 = cy + h / 2
+
+        bbox_output = torch.stack([x1, y1, x2, y2], dim=-1)
+        bbox_output = bbox_output.clamp(0, 1)
 
         return class_output, bbox_output
 
