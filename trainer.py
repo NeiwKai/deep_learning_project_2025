@@ -1,4 +1,5 @@
 import os
+import copy
 import pandas as pd
 from datetime import datetime
 
@@ -107,7 +108,7 @@ print("Using device:", device)
 
 # Model Initialize
 model_base = MobileNetMultiHead(num_classes=num_classes)
-model = model_base
+model = copy.deepcopy(model_base)
 model = model.to(device)
 
 
@@ -164,7 +165,7 @@ print("Training Complete!")
 
 # -- Testing --
 
-model_best = model_base
+model_best = copy.deepcopy(model_base)
 model_best = model_best.to(device)
 model_best.load_state_dict(torch.load(f"{model._get_name()}_best_vloss.pth"))
 
