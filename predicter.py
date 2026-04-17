@@ -1,4 +1,5 @@
 import os
+import copy
 import torch
 import pandas as pd
 from torch.utils.data import DataLoader
@@ -61,7 +62,7 @@ if __name__ == '__main__':
     print("Using device:", device)
 
     model_base = MobileNetMultiHead(num_classes=num_classes)
-    model = model_base
+    model = copy.deepcopy(model_base)
     model = model.to(device)
     model.load_state_dict(torch.load(f"{model._get_name()}_best_vloss.pth"))
 
