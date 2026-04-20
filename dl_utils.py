@@ -169,15 +169,3 @@ def _draw_bbox(ax, bbox, img_h, img_w, color, label="", mode="gt"):
         ha="left", va="top"
     )
     
-
-
-def OO_draw_bbox(ax, bbox, img_h, img_w, color, label=""):
-    x, y, w, h = bbox
-    x *= img_w
-    y *= img_h
-    w *= img_w
-    h *= img_h
-
-    rect = plt.Rectangle((x, y), w, h, linewidth=2, edgecolor=color, facecolor="none")
-    ax.add_patch(rect)
-    ax.text(x, y - 2, label, color=color, fontsize=10, bbox=dict(facecolor="white", alpha=0.6))
