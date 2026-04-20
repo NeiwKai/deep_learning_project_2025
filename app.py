@@ -2,11 +2,9 @@ import copy
 import torch
 from PIL import Image
 import numpy as np
-import pandas as pd
 from torch.utils.data import DataLoader
 import torchvision.transforms.v2 as transforms_v2
 from model import MobileNetMultiHead, ResNet18MultiHead, ResNet50MultiHead, UNetMultiHead
-from dataset import ObjectDataset
 import matplotlib.pyplot as plt
 import streamlit as st
 
@@ -45,7 +43,7 @@ def load_model():
     model_base = MobileNetMultiHead(num_classes=num_classes)
     model = copy.deepcopy(model_base)
     model = model.to(device)
-    model.load_state_dict(torch.load(f"{model._get_name()}_best_vloss.pth"))
+    model.load_state_dict(torch.load(f"{model._get_name()}_best_vloss.pth", map_location=device))
 
     return model, device
 
