@@ -19,6 +19,16 @@ python3 predicter.py
 # it will generate 'predictions.jpg'
 ```
 
+### Host an app
+```bash
+# With docker
+docker build -t deep_app -f Dockerfile.app .
+docker run -p 8501:8501 deep_app
+
+# Local
+streamlit run app.py
+```
+
 ### TODO
 -   [x] Develop a base test script
 -   [ ] Train the model with acceptable result
