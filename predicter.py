@@ -64,7 +64,7 @@ if __name__ == '__main__':
     model_base = MobileNetMultiHead(num_classes=num_classes)
     model = copy.deepcopy(model_base)
     model = model.to(device)
-    model.load_state_dict(torch.load(f"{model._get_name()}_best_vloss.pth"))
+    model.load_state_dict(torch.load(f"{model._get_name()}_best_vloss.pth", map_location=device))
 
     test_images, test_labels, test_bboxes, test_og_size = next(iter(test_dl))
     test_images = test_images.to(device)

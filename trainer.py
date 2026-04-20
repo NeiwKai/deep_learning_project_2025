@@ -167,7 +167,7 @@ print("Training Complete!")
 
 model_best = copy.deepcopy(model_base)
 model_best = model_best.to(device)
-model_best.load_state_dict(torch.load(f"{model._get_name()}_best_vloss.pth"))
+model_best.load_state_dict(torch.load(f"{model._get_name()}_best_vloss.pth", map_location=device))
 
 # Evaluate on the train set
 train_loss, train_bbox_loss, train_y_preds, train_y_trues, train_bbox_preds, train_bbox_trues = test(
