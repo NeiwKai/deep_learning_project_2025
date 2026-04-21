@@ -33,6 +33,8 @@ docker run -p 8501:8501 deep_app
 streamlit run app.py
 ```
 
+_An instuction also included as `instruction.md`_
+
 ### TODO
 -   [x] Develop a base test script
 -   [x] Train the model with acceptable result
