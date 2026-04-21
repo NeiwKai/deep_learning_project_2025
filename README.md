@@ -1,7 +1,11 @@
-## Format
+### Format
 -   Python Version: `3.13.11`
 
-### Training
+### Dataset
+<a href="https://universe.roboflow.com/wrkspc-gi0hz/cloud-classification-mf91q">click me!</a> </br>
+_Download the dataset version "2024-12-22 7:33pm" as a zip with "Tensorflow Object Detection" format_
+
+## Training
 ```bash
 python3 trainer.py
 ```
@@ -13,13 +17,13 @@ model_base = MobileNetMultiHead(num_classes=num_classes)
 ```
 _Add new model in the `model.py`_
 
-### Prediction
+## Prediction
 ```bash
 python3 predicter.py
 # it will generate 'predictions.jpg'
 ```
 
-### Host an app
+## Host an app
 ```bash
 # With docker
 docker build -t deep_app -f Dockerfile.app .
@@ -31,6 +35,6 @@ streamlit run app.py
 
 ### TODO
 -   [x] Develop a base test script
--   [ ] Train the model with acceptable result
--   [ ] Create a report
--   [ ] Write a docker image
+-   [x] Train the model with acceptable result
+-   [x] Create a report
+-   [x] Write a docker image
